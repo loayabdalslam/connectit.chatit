@@ -74,7 +74,9 @@ def test():
     here = os.path.dirname(os.path.abspath(__file__))
     root = os.path.dirname(here)
     script = os.path.join(root, "scripts", "test_runner.py")
-    res = subprocess.run([sys.executable, script], cwd=root)
+    env = dict(os.environ)
+    env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+    res = subprocess.run([sys.executable, script], cwd=root, env=env)
     raise typer.Exit(code=res.returncode)
 
 

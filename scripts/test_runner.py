@@ -2,9 +2,14 @@ import importlib
 import pkgutil
 import sys
 import traceback
+import os
 
 
 def main():
+    # Ensure project root on path
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
     success = True
     for mod in pkgutil.iter_modules(["tests"]):
         if not mod.ispkg and mod.name.startswith("test_"):
@@ -23,4 +28,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
