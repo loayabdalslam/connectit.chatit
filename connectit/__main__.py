@@ -13,6 +13,9 @@ from .coordinator import run_coordinator
 from .node import run_node
 from .hf import has_transformers, has_datasets, load_model_and_tokenizer, export_torchscript, export_onnx
 from .p2p import generate_join_link, parse_join_link
+from .p2p_runtime import run_p2p_node, P2PNode
+import asyncio
+from .auth import require_login
 
 app = typer.Typer(add_completion=False, help="ConnectIT CLI (prototype)")
 console = Console()
@@ -30,6 +33,7 @@ def coordinator(
     port: int = typer.Option(8765, help="Bind port"),
 ):
     """Start the coordinator service (registry + orchestrator)."""
+    require_login()
     run_coordinator(host=host, port=port)
 
 
@@ -40,6 +44,7 @@ def node(
     price: float = typer.Option(0.0, help="Price per unit (demo)"),
 ):
     """Start a node agent that connects to a coordinator."""
+    require_login()
     run_node(coordinator_url=coordinator, node_name=name, price=price)
 
 
@@ -51,6 +56,7 @@ def export(
     example_text: str = typer.Option("Hello ConnectIT", help="Example text to trace/export"),
 ):
     """Export a Hugging Face model locally to ONNX or TorchScript."""
+    require_login()
     if to.lower() == "onnx":
         if not has_transformers():
             raise typer.Exit(code=1)
@@ -113,11 +119,62 @@ def p2p_link(
     bootstrap_csv: str = typer.Option("", help="Comma-separated bootstrap peers (multiaddr or host:port)"),
 ):
     """Generate or parse a P2P join link."""
+    require_login()
     boots = [b for b in (s.strip() for s in bootstrap_csv.split(",")) if b]
     link = generate_join_link(network, model, hash_hex, boots)
     console.print(f"Link: {link}")
     info = parse_join_link(link)
     console.print(f"Parsed: {info}")
+
+
+@app.command()
+def p2p(
+    host: str = typer.Option("0.0.0.0", help="Bind host"),
+    port: int = typer.Option(4001, help="Bind port"),
+    bootstrap_link: str = typer.Option("", help="p2pnet:// join link or ws://host:port"),
+):
+    """Run a P2P node (discovery + optional services)."""
+    require_login()
+    asyncio.run(run_p2p_node(host=host, port=port, bootstrap_link=(bootstrap_link or None)))
+
+
+@app.command()
+def deploy_hf(
+    model: str = typer.Option("distilgpt2", help="HF Causal LM model name"),
+    price_per_token: float = typer.Option(0.0, help="Price per output token"),
+    host: str = typer.Option("0.0.0.0", help="Bind host"),
+    port: int = typer.Option(4001, help="Bind port"),
+    bootstrap_link: str = typer.Option("", help="p2pnet:// join link or ws://host:port"),
+):
+    """Deploy a Hugging Face text-generation service on the P2P network."""
+    require_login()
+    asyncio.run(run_p2p_node(host=host, port=port, bootstrap_link=(bootstrap_link or None), model_name=model, price_per_token=price_per_token))
+
+
+@app.command()
+def p2p_request(
+    prompt: str = typer.Argument(..., help="Prompt text"),
+    model: str = typer.Option("distilgpt2", help="Model name to request"),
+    bootstrap_link: str = typer.Option("", help="Join link or ws:// peer to bootstrap"),
+    max_new_tokens: int = typer.Option(32, help="Max new tokens"),
+):
+    """Join P2P and request a generation from the cheapest/lowest-latency provider."""
+    require_login()
+    async def _run():
+        node = P2PNode(host="127.0.0.1", port=0)
+        await node.start()
+        if bootstrap_link:
+            await node.connect_bootstrap(bootstrap_link)
+        # Wait a moment to discover providers
+        await asyncio.sleep(2)
+        best = node.pick_provider(model)
+        if not best:
+            console.print("[red]No provider found for model[/red]")
+            return
+        pid, _ = best
+        res = await node.request_generation(pid, prompt, max_new_tokens=max_new_tokens, model_name=model)
+        console.print(res)
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

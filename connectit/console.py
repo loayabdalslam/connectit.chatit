@@ -7,6 +7,7 @@ from rich.table import Table
 import typer
 
 from .utils import connectit_home, data_file, load_json, save_json, gen_salt, hash_password
+from .auth import prompt_login as auth_prompt_login
 from .model import random_mlp, serialize_layer
 from .coordinator import Coordinator
 from .protocol import NODE_LIST, LIST_NODES, RUN_PIPELINE, RUN_TRAIN_STEP, FORWARD_TASK, HF_LOAD, HF_INFER, HF_UNLOAD, CREATE_JOB, RUN_JOB_STEPS, GET_JOB
@@ -49,28 +50,8 @@ def verify_user(username: str, password: str) -> bool:
 
 
 def prompt_login() -> str:
-    ensure_users_store()
-    console.print("[bold cyan]Welcome to ConnectIT[/bold cyan]")
-    while True:
-        choice = typer.prompt("Login (l) / Sign up (s) / Quit (q)", default="l")
-        if choice.lower() == "q":
-            raise typer.Exit()
-        if choice.lower() == "s":
-            username = typer.prompt("Choose username")
-            password = typer.prompt("Choose password", hide_input=True, confirmation_prompt=True)
-            try:
-                add_user(username, password)
-                console.print("[green]User created. Please login.[/green]")
-            except ValueError:
-                console.print("[red]Username already exists[/red]")
-        else:
-            username = typer.prompt("Username")
-            password = typer.prompt("Password", hide_input=True)
-            if verify_user(username, password):
-                console.print(f"[green]Logged in as[/green] {username}")
-                return username
-            else:
-                console.print("[red]Invalid credentials[/red]")
+    # Delegate to shared auth flow
+    return auth_prompt_login()
 
 
 async def fetch_nodes_ws(coordinator_url: str) -> List[Dict[str, Any]]:

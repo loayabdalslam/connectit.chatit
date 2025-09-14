@@ -18,6 +18,20 @@ Requires-Dist: onnx>=1.14; extra == "onnx"
 Requires-Dist: onnxruntime>=1.17; extra == "onnx"
 Provides-Extra: torch
 Requires-Dist: torch>=2.1; (platform_system != "Windows" or platform_machine != "ARM64") and extra == "torch"
+Provides-Extra: dht
+Requires-Dist: kademlia>=2.2.2; extra == "dht"
+Provides-Extra: nat
+Requires-Dist: miniupnpc>=2.2.5; extra == "nat"
+Requires-Dist: aiortc>=1.9.0; extra == "nat"
+Provides-Extra: all
+Requires-Dist: transformers>=4.40; extra == "all"
+Requires-Dist: datasets>=2.17; extra == "all"
+Requires-Dist: onnx>=1.14; extra == "all"
+Requires-Dist: onnxruntime>=1.17; extra == "all"
+Requires-Dist: torch>=2.1; (platform_system != "Windows" or platform_machine != "ARM64") and extra == "all"
+Requires-Dist: kademlia>=2.2.2; extra == "all"
+Requires-Dist: miniupnpc>=2.2.5; extra == "all"
+Requires-Dist: aiortc>=1.9.0; extra == "all"
 
 ConnectIT (Prototype)
 =====================
@@ -34,6 +48,14 @@ Prereqs: Python 3.9+, `pip`.
 1) Install deps (editable):
 
    pip install -e .
+
+   Optional extras:
+
+   - All features (HF, ONNX, Torch, DHT, NAT):
+
+     pip install -e .[all]
+
+   - Pick subsets: `.[hf]`, `.[onnx]`, `.[torch]`, `.[dht]`, `.[nat]`
 
 2) Start a coordinator (terminal A):
 
@@ -91,9 +113,75 @@ Export
 
   connectit export --to torchscript --model distilbert-base-uncased --output out_dir
 
+P2P (Torrent-like) Prototype
+----------------------------
+
+- Generate a join link:
+
+  connectit p2p_link --network llmnet --model demo --hash deadbeef --bootstrap_csv "/ip4/203.0.113.10/tcp/4001/p2p/QmPeerID"
+
+- Run a P2P node (discovery only):
+
+  connectit p2p --host 0.0.0.0 --port 4001 --bootstrap_link ws://SEED_HOST:4001
+
+- Deploy an HF generation service on P2P (sets price per token):
+
+  connectit deploy_hf --model distilgpt2 --price-per-token 0.002 --host 0.0.0.0 --port 4001 --bootstrap_link ws://SEED_HOST:4001
+
+- Request a generation via P2P (picks cheapest/lowest-latency provider):
+
+  connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://SEED_HOST:4001
+
 Testing
 -------
 
 - Built-in lightweight tests (no pytest needed):
 
   connectit test
+
+
+Roles & Usage Guide
+-------------------
+
+Network Admin (Bootstrap / Seeds)
+- Start one or more P2P seed nodes to help peers discover each other:
+
+  connectit p2p --host 0.0.0.0 --port 4001
+
+- Open firewall port 4001/TCP and share a join link:
+
+  connectit p2p_link --network llmnet --model demo --hash deadbeef --bootstrap_csv "/ip4/SEED_IP/tcp/4001"
+
+- Optional DHT (Kademlia): install extras `.[dht]`, run additional DHT daemons, and wire into runtime (future step).
+- NAT: install `.[nat]` and enable UPnP on edge nodes where possible; otherwise consider STUN/TURN.
+
+Seller (Provider Node: Host a Model)
+- Deploy a Hugging Face model with a price per token and join the network:
+
+  connectit deploy_hf --model distilgpt2 --price-per-token 0.002 --host 0.0.0.0 --port 4002 --bootstrap_link ws://SEED_HOST:4001
+
+- The node advertises available models and pricing, and responds to generation requests. Latency is measured via ping and per-request.
+
+Buyer (Consumer: Use a Model)
+- Join the network and auto-pick cheapest/lowest-latency provider for a model:
+
+  connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://SEED_HOST:4001
+
+- Output includes text, new tokens, latency_ms, price_per_token, and total cost.
+
+Coordinator Mode (Legacy / Demo)
+- Start coordinator: `connectit coordinator`
+- Start worker nodes: `connectit node --coordinator ws://HOST:8765 --name node1 --price 0.01`
+- Open console: `connectit console` (interactive menus for inference, training, HF demo, jobs)
+
+Security & Identity
+- This prototype is not secure. For production, implement:
+  - Per-node identities (ed25519) and signed service announcements
+  - TLS/mTLS between peers and seed nodes
+  - Sandbox and resource limits on providers
+  - Reputation/allowlists to reduce spam
+
+Troubleshooting
+- Windows PATH: if `connectit` is not on PATH, use `python -m connectit ...` with your Python.
+- OpenMP conflicts in tests: `connectit test` sets `KMP_DUPLICATE_LIB_OK=TRUE` automatically.
+- HF/Datasets/ONNX installs may be large; prefer a virtualenv.
