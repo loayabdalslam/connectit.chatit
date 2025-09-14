@@ -5,6 +5,7 @@ import platform
 import psutil
 import websockets
 from typing import Dict, Any, Optional
+from rich.console import Console
 
 from .protocol import (
     msg,
@@ -29,6 +30,8 @@ from .protocol import (
 from .model import deserialize_layer, layer_forward
 from .utils import new_id
 import numpy as np
+
+console = Console()
 
 
 def gather_resources() -> Dict[str, Any]:
@@ -55,9 +58,11 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
 
     caches: dict[str, dict[str, Any]] = {}
     models: dict[str, Any] = {}  # model_id -> entries for hf/onnx/hf_part
+    console.log(f"[cyan]Node starting[/cyan] → connecting to [bold]{coordinator_url}[/bold]")
     while True:
         try:
             async with websockets.connect(coordinator_url, max_size=32 * 1024 * 1024) as ws:
+                console.log("[green]Connected to coordinator[/green]")
                 # Register
                 await ws.send(
                     json.dumps(
@@ -79,6 +84,7 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
                     t = data.get("type")
                     if t == INFO and not node_id:
                         node_id = data.get("node_id")
+                        console.log(f"[green]Registered as[/green] {node_id}")
                     elif t == TASK:
                         task_id = data.get("task_id")
                         payload = data.get("payload", {})
@@ -271,11 +277,13 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
                             else:
                                 await ws.send(json.dumps(msg(ERROR, task_id=task_id, error=f"unknown_task:{kind}")))
                         except Exception as e:
+                            console.log(f"[red]Task error[/red]: {e}")
                             await ws.send(json.dumps(msg(ERROR, task_id=task_id, error=str(e))))
                     else:
                         # ignore others for now
                         pass
-        except Exception:
+        except Exception as e:
+            console.log(f"[yellow]Disconnected or connect failed[/yellow]: {e}. Retrying in 2s...")
             await asyncio.sleep(2)
             continue
         # Outer try ends, reconnect

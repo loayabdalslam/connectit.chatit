@@ -10,6 +10,7 @@ connectit/jobs.py
 connectit/model.py
 connectit/node.py
 connectit/optim.py
+connectit/p2p.py
 connectit/protocol.py
 connectit/utils.py
 connectit.egg-info/PKG-INFO
@@ -21,4 +22,5 @@ connectit.egg-info/top_level.txt
 tests/test_hf_optional.py
 tests/test_model.py
 tests/test_optim.py
+tests/test_p2p.py
 tests/test_utils.py

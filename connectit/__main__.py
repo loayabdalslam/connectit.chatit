@@ -1,5 +1,11 @@
 from typing import Optional, List
 import typer
+try:
+    # Workaround for help formatting issue on some Windows/click combos
+    import typer.rich_utils as _typer_rich_utils  # type: ignore
+    _typer_rich_utils.USE_RICH = False
+except Exception:
+    pass
 from rich.console import Console
 
 from .console import run_console
@@ -12,7 +18,7 @@ app = typer.Typer(add_completion=False, help="ConnectIT CLI (prototype)")
 console = Console()
 
 
-@app.command()
+@app.command("console")
 def console_app():
     """Open the interactive console (login, offers, jobs)."""
     run_console()
@@ -81,15 +87,34 @@ def test():
     raise typer.Exit(code=res.returncode)
 
 
+@app.command("help")
+def help_cmd():
+    """Show usage help (workaround for some environments)."""
+    console.print("Commands:")
+    console.print("- coordinator: Start coordinator server")
+    console.print("  python -m connectit coordinator --host 0.0.0.0 --port 8765")
+    console.print("- node: Start a node agent")
+    console.print("  python -m connectit node --coordinator \"ws://127.0.0.1:8765\" --name node1 --price 0.01")
+    console.print("- console: Open interactive console")
+    console.print("  python -m connectit console")
+    console.print("- export: Export HF model to ONNX/TorchScript")
+    console.print("  python -m connectit export --to onnx --model distilbert-base-uncased --output model.onnx")
+    console.print("- test: Run built-in tests with logs")
+    console.print("  python -m connectit test")
+    console.print("- p2p_link: Create a join link")
+    console.print("  python -m connectit p2p_link --network llmnet --model demo --hash deadbeef --bootstrap_csv \"/ip4/1.2.3.4/tcp/4001/p2p/QmPeer\"")
+
+
 @app.command()
 def p2p_link(
     network: str = typer.Option("llmnet", help="Network ID"),
     model: str = typer.Option("demo", help="Model identifier"),
     hash_hex: str = typer.Option("deadbeef", help="Content hash hex"),
-    bootstrap: List[str] = typer.Option([], help="Bootstrap peers (multiaddr or host:port)")
+    bootstrap_csv: str = typer.Option("", help="Comma-separated bootstrap peers (multiaddr or host:port)"),
 ):
     """Generate or parse a P2P join link."""
-    link = generate_join_link(network, model, hash_hex, bootstrap)
+    boots = [b for b in (s.strip() for s in bootstrap_csv.split(",")) if b]
+    link = generate_join_link(network, model, hash_hex, boots)
     console.print(f"Link: {link}")
     info = parse_join_link(link)
     console.print(f"Parsed: {info}")
