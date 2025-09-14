@@ -23,6 +23,8 @@ from .protocol import (
     ONNX_LOAD,
     ONNX_UNLOAD,
     ONNX_INFER,
+    HF_PART_LOAD,
+    HF_PART_FORWARD,
 )
 from .model import deserialize_layer, layer_forward
 from .utils import new_id
@@ -52,7 +54,7 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
         DEVICE = "cpu"
 
     caches: dict[str, dict[str, Any]] = {}
-    models: dict[str, Any] = {}  # model_id -> {'type': 'hf'|'onnx', 'obj': model, 'tokenizer': tok, 'device': dev}
+    models: dict[str, Any] = {}  # model_id -> entries for hf/onnx/hf_part
     while True:
         try:
             async with websockets.connect(coordinator_url, max_size=32 * 1024 * 1024) as ws:
@@ -224,6 +226,48 @@ async def node_client(coordinator_url: str, node_name: Optional[str], price: flo
                                 if model_id in models:
                                     del models[model_id]
                                 await ws.send(json.dumps(msg(RESULT, task_id=task_id, ok=True)))
+                            elif kind == HF_PART_LOAD:
+                                model_name = payload.get("model_name", "distilbert-base-uncased")
+                                start = int(payload.get("start", 0))
+                                end = int(payload.get("end", 6))
+                                model_id = payload.get("model_id") or new_id("hfpart")
+                                try:
+                                    from .hf import build_distilbert_partial
+                                except Exception:
+                                    await ws.send(json.dumps(msg(ERROR, task_id=task_id, error="hf_support_missing")))
+                                    continue
+                                part, tok, dev = build_distilbert_partial(model_name, start, end)
+                                models[model_id] = {"type": "hf_part", "model": part, "tokenizer": tok, "device": dev, "start": start, "end": end}
+                                await ws.send(json.dumps(msg(RESULT, task_id=task_id, model_id=model_id)))
+                            elif kind == HF_PART_FORWARD:
+                                model_id = payload.get("model_id")
+                                m = models.get(model_id)
+                                if not m or m.get("type") != "hf_part":
+                                    await ws.send(json.dumps(msg(ERROR, task_id=task_id, error="model_not_loaded")))
+                                    continue
+                                import torch  # type: ignore
+                                mdl = m["model"]
+                                tok = m.get("tokenizer")
+                                dev = m["device"]
+                                text = payload.get("text")
+                                hidden = payload.get("hidden")
+                                attn = None
+                                if text is not None and tok is not None:
+                                    enc = tok(text, return_tensors="pt")
+                                    input_ids = enc["input_ids"].to(dev)
+                                    attn = enc.get("attention_mask")
+                                    if attn is not None:
+                                        attn = attn.to(dev)
+                                    with torch.no_grad():
+                                        out = mdl(input_ids=input_ids, attention_mask=attn)
+                                    hid = out.detach().cpu().numpy().tolist()
+                                else:
+                                    import numpy as np
+                                    hs = torch.from_numpy(np.array(hidden, dtype=np.float32)).to(dev)
+                                    with torch.no_grad():
+                                        out = mdl(hidden_states=hs)
+                                    hid = out.detach().cpu().numpy().tolist()
+                                await ws.send(json.dumps(msg(RESULT, task_id=task_id, hidden=hid)))
                             else:
                                 await ws.send(json.dumps(msg(ERROR, task_id=task_id, error=f"unknown_task:{kind}")))
                         except Exception as e:

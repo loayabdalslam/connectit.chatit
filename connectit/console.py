@@ -164,6 +164,8 @@ def run_console():
         console.print("5) Load dataset with preprocessing (preview)")
         console.print("6) Create persistent MLP training job")
         console.print("7) Run steps on current job")
+        console.print("9) Create HF batched inference job")
+        console.print("8) Prototype DistilBERT split across 2 nodes")
         console.print("h) Help")
         console.print("q) Quit")
         choice = typer.prompt("Select", default="1")
@@ -350,6 +352,78 @@ def run_console():
                 res = asyncio.run(run_steps())
                 if res.get("type") == "result":
                     console.print(f"Step now: {res.get('step')} losses={res.get('losses')}")
+                else:
+                    console.print(res)
+            except Exception as e:
+                console.print(f"[red]Failed:[/red] {e}")
+        elif choice == "9":
+            nodes = asyncio.run(fetch_nodes_ws(coord_url))
+            if not nodes:
+                console.print("[yellow]No nodes available.[/yellow]")
+                continue
+            tbl = Table(title="Nodes")
+            tbl.add_column("#")
+            tbl.add_column("Node ID")
+            for i, n in enumerate(nodes):
+                tbl.add_row(str(i), n.get("node_id", ""))
+            console.print(tbl)
+            idx = int(typer.prompt("Pick node for inference", default="0"))
+            if idx < 0 or idx >= len(nodes):
+                console.print("Invalid index")
+                continue
+            node_id = nodes[idx]["node_id"]
+            model_name = typer.prompt("HF Causal LM model", default="distilgpt2")
+            ds_name = typer.prompt("Dataset name", default="ag_news")
+            split = typer.prompt("Split", default="train")
+            text_field = typer.prompt("Text field", default="text")
+            max_new = int(typer.prompt("max_new_tokens", default="32"))
+            cfg = {
+                "kind": "hf_infer",
+                "nodes_order": [node_id],
+                "model_name": model_name,
+                "dataset": {"name": ds_name, "split": split, "text_field": text_field},
+                "max_new_tokens": max_new,
+            }
+            import websockets
+            async def create_job():
+                async with websockets.connect(coord_url) as ws:
+                    await ws.send(json.dumps({"type": CREATE_JOB, "config": cfg}))
+                    data = json.loads(await ws.recv())
+                    if data.get("type") == "result":
+                        return data.get("job_id")
+                    raise RuntimeError(data)
+            try:
+                current_job_id = asyncio.run(create_job())
+                console.print(f"[green]HF job created:[/green] {current_job_id}")
+            except Exception as e:
+                console.print(f"[red]Failed:[/red] {e}")
+        elif choice == "8":
+            nodes = asyncio.run(fetch_nodes_ws(coord_url))
+            if len(nodes) < 2:
+                console.print("[yellow]Need at least 2 nodes for prototype.[/yellow]")
+                continue
+            tbl = Table(title="Nodes")
+            tbl.add_column("#")
+            tbl.add_column("Node ID")
+            for i, n in enumerate(nodes):
+                tbl.add_row(str(i), n.get("node_id", ""))
+            console.print(tbl)
+            i0 = int(typer.prompt("Index of node A", default="0"))
+            i1 = int(typer.prompt("Index of node B", default="1"))
+            split = int(typer.prompt("Split layer (0-6)", default="3"))
+            text = typer.prompt("Text", default="Hello from ConnectIT prototype")
+            n0 = nodes[i0]["node_id"]
+            n1 = nodes[i1]["node_id"]
+            import websockets
+            async def run_pipe():
+                async with websockets.connect(coord_url) as ws:
+                    await ws.send(json.dumps({"type": "run_hf_pipeline", "nodes_order": [n0, n1], "model_name": "distilbert-base-uncased", "split_layer": split, "text": text}))
+                    d = json.loads(await ws.recv())
+                    return d
+            try:
+                res = asyncio.run(run_pipe())
+                if res.get("type") == "result":
+                    console.print(f"Hidden shapes: partA={res.get('shape0')} partB={res.get('shape1')}")
                 else:
                     console.print(res)
             except Exception as e:

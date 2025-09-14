@@ -31,6 +31,7 @@ RUN_JOB_STEPS = "run_job_steps"
 GET_JOB = "get_job"
 STOP_JOB = "stop_job"
 FORWARD_TASK = "forward_task"
+RUN_HF_PIPELINE = "run_hf_pipeline"
 
 
 # Task payloads
@@ -46,6 +47,10 @@ HF_INFER = "hf_infer"
 ONNX_LOAD = "onnx_load"
 ONNX_UNLOAD = "onnx_unload"
 ONNX_INFER = "onnx_infer"
+
+# Partitioned HF tasks
+HF_PART_LOAD = "hf_part_load"
+HF_PART_FORWARD = "hf_part_forward"
 
 
 def is_message(obj: Any) -> bool:

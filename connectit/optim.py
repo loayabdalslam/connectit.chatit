@@ -6,6 +6,10 @@ import numpy as np
 class Optimizer:
     def step(self, params: Dict[str, Any], grads: Dict[str, Any]):
         raise NotImplementedError
+    def get_state(self) -> Dict[str, Any]:
+        return {}
+    def load_state(self, state: Dict[str, Any]):
+        return self
 
 
 class SGD(Optimizer):
@@ -34,6 +38,14 @@ class Momentum(Optimizer):
                 v = self.momentum * v + g
                 self.v[k] = v
                 params[k] = (np.array(params[k], dtype=np.float32) - self.lr * v).tolist()
+    def get_state(self) -> Dict[str, Any]:
+        return {"v": {k: v.tolist() for k, v in self.v.items()}, "lr": self.lr, "momentum": self.momentum}
+    def load_state(self, state: Dict[str, Any]):
+        v = state.get("v", {})
+        self.v = {k: np.array(vv, dtype=np.float32) for k, vv in v.items()}
+        self.lr = float(state.get("lr", self.lr))
+        self.momentum = float(state.get("momentum", self.momentum))
+        return self
 
 
 class Adam(Optimizer):
@@ -64,6 +76,27 @@ class Adam(Optimizer):
                 params[k] = (np.array(params[k], dtype=np.float32) - self.lr * m_hat / (np.sqrt(v_hat) + self.eps)).tolist()
                 self.m[k] = m
                 self.v[k] = v
+    def get_state(self) -> Dict[str, Any]:
+        return {
+            "m": {k: v.tolist() for k, v in self.m.items()},
+            "v": {k: v.tolist() for k, v in self.v.items()},
+            "t": self.t,
+            "lr": self.lr,
+            "beta1": self.beta1,
+            "beta2": self.beta2,
+            "eps": self.eps,
+        }
+    def load_state(self, state: Dict[str, Any]):
+        m = state.get("m", {})
+        v = state.get("v", {})
+        self.m = {k: np.array(vv, dtype=np.float32) for k, vv in m.items()}
+        self.v = {k: np.array(vv, dtype=np.float32) for k, vv in v.items()}
+        self.t = int(state.get("t", self.t))
+        self.lr = float(state.get("lr", self.lr))
+        self.beta1 = float(state.get("beta1", self.beta1))
+        self.beta2 = float(state.get("beta2", self.beta2))
+        self.eps = float(state.get("eps", self.eps))
+        return self
 
 
 def build_optimizer(name: str, **kwargs) -> Optimizer:
@@ -75,4 +108,3 @@ def build_optimizer(name: str, **kwargs) -> Optimizer:
     if name == "adam":
         return Adam(**kwargs)
     raise ValueError(f"unknown optimizer: {name}")
-

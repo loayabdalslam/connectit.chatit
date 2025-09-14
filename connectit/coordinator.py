@@ -24,6 +24,7 @@ from .protocol import (
     GET_JOB,
     STOP_JOB,
     FORWARD_TASK,
+    RUN_HF_PIPELINE,
     TASK_LAYER_FORWARD,
     TASK_LAYER_FORWARD_TRAIN,
     TASK_LAYER_BACKWARD,
@@ -32,6 +33,7 @@ from .utils import new_id, now_ms
 import numpy as np
 from .jobs import create_mlp_job, get_job, put_job, Job
 from .optim import build_optimizer
+from .hf import load_dataset
 
 
 console = Console()
@@ -176,6 +178,85 @@ class Coordinator:
                     raise RuntimeError(data.get("error", "unknown error"))
         return layers, loss
 
+    async def train_step_with_optimizer(
+        self,
+        layers: List[dict],
+        nodes_order: List[str],
+        x: List[List[float]],
+        y_true: List[List[float]],
+        opt_name: str,
+        opt_params: Dict[str, Any],
+        opt_state: Dict[str, Any],
+    ) -> tuple[List[dict], float, Dict[str, Any]]:
+        # Forward with caches (as before)
+        step_id = new_id("step")
+        cur = x
+        for i, nid in enumerate(nodes_order):
+            info = self.nodes.get(nid)
+            if not info:
+                raise RuntimeError(f"Node {nid} not available")
+            ws: WebSocketServerProtocol = info["ws"]
+            task_id = new_id("task")
+            payload = {
+                "kind": TASK_LAYER_FORWARD_TRAIN,
+                "layer": layers[i],
+                "x": cur,
+                "cache_id": f"{step_id}-L{i}",
+            }
+            await ws.send(json.dumps(msg(TASK, task_id=task_id, payload=payload)))
+            while True:
+                raw = await ws.recv()
+                data = json.loads(raw)
+                if data.get("type") == RESULT and data.get("task_id") == task_id:
+                    cur = data.get("output")
+                    break
+                elif data.get("type") == ERROR and data.get("task_id") == task_id:
+                    raise RuntimeError(data.get("error", "unknown error"))
+        y_pred = np.array(cur, dtype=np.float32)
+        y_t = np.array(y_true, dtype=np.float32)
+        diff = y_pred - y_t
+        loss = float(np.mean(diff ** 2))
+        upstream = (2.0 / y_pred.shape[0]) * diff
+
+        # Collect grads per layer
+        dY = upstream.tolist()
+        grads: List[Dict[str, Any]] = [None] * len(nodes_order)  # type: ignore
+        for i in reversed(range(len(nodes_order))):
+            nid = nodes_order[i]
+            info = self.nodes.get(nid)
+            if not info:
+                raise RuntimeError(f"Node {nid} not available")
+            ws: WebSocketServerProtocol = info["ws"]
+            task_id = new_id("task")
+            payload = {
+                "kind": TASK_LAYER_BACKWARD,
+                "cache_id": f"{step_id}-L{i}",
+                "upstream_grad": dY,
+            }
+            await ws.send(json.dumps(msg(TASK, task_id=task_id, payload=payload)))
+            while True:
+                raw = await ws.recv()
+                data = json.loads(raw)
+                if data.get("type") == RESULT and data.get("task_id") == task_id:
+                    grads[i] = {"gW": data.get("gW"), "gb": data.get("gb")}
+                    dY = data.get("dX")
+                    break
+                elif data.get("type") == ERROR and data.get("task_id") == task_id:
+                    raise RuntimeError(data.get("error", "unknown error"))
+
+        # Apply optimizer step across layers with namespaced keys
+        opt = build_optimizer(opt_name, **opt_params)
+        opt.load_state(opt_state or {})
+        for i in range(len(layers)):
+            L = layers[i]
+            p = {f"L{i}.W": L["W"], f"L{i}.b": L["b"]}
+            g = {f"L{i}.W": grads[i]["gW"], f"L{i}.b": grads[i]["gb"]}
+            opt.step(p, g)
+            L["W"] = p[f"L{i}.W"]
+            L["b"] = p[f"L{i}.b"]
+        state = opt.get_state()
+        return layers, loss, state
+
 
 async def handle_client(coord: Coordinator, ws: WebSocketServerProtocol):
     node_id: Optional[str] = None
@@ -223,12 +304,18 @@ async def handle_client(coord: Coordinator, ws: WebSocketServerProtocol):
                 try:
                     cfg = data.get("config") or {}
                     kind = cfg.get("kind", "mlp_train")
-                    if kind != "mlp_train":
+                    if kind == "mlp_train":
+                        nodes_order = cfg.get("nodes_order") or []
+                        layers = cfg.get("layers") or []
+                        optimizer = cfg.get("optimizer") or {"name": "adam", "params": {"lr": 0.001}, "state": {}}
+                        job = create_mlp_job(nodes_order, layers, optimizer)
+                    elif kind == "hf_infer":
+                        node_id = (cfg.get("nodes_order") or [None])[0]
+                        model_name = cfg.get("model_name", "distilgpt2")
+                        dataset = cfg.get("dataset") or {"name": "ag_news", "split": "train", "text_field": "text"}
+                        job = create_hf_infer_job(node_id, model_name, dataset, int(cfg.get("max_new_tokens", 32)))
+                    else:
                         raise RuntimeError("unsupported_job_kind")
-                    nodes_order = cfg.get("nodes_order") or []
-                    layers = cfg.get("layers") or []
-                    optimizer = cfg.get("optimizer") or {"name": "adam", "params": {"lr": 0.001}}
-                    job = create_mlp_job(nodes_order, layers, optimizer)
                     await ws.send(json.dumps(msg(RESULT, job_id=job.job_id)))
                 except Exception as e:
                     await ws.send(json.dumps(msg(ERROR, error=str(e))))
@@ -242,18 +329,142 @@ async def handle_client(coord: Coordinator, ws: WebSocketServerProtocol):
                     job = get_job(job_id)
                     if not job:
                         raise RuntimeError("job_not_found")
-                    if job.kind != "mlp_train":
+                    if job.kind == "mlp_train":
+                        losses = []
+                        for _ in range(steps):
+                            name = job.optimizer.get("name", "adam")
+                            params = job.optimizer.get("params", {})
+                            state = job.optimizer.get("state", {})
+                            updated_layers, loss, new_state = await coord.train_step_with_optimizer(
+                                layers=job.layers, nodes_order=job.nodes_order, x=batch, y_true=target, opt_name=name, opt_params=params, opt_state=state
+                            )
+                            job.layers = updated_layers
+                            job.optimizer["state"] = new_state
+                            job.step += 1
+                            losses.append(loss)
+                        job.losses += losses
+                        put_job(job)
+                        await ws.send(json.dumps(msg(RESULT, job_id=job.job_id, losses=losses, step=job.step, layers=job.layers)))
+                    elif job.kind == "hf_infer":
+                        # Batched inference using datasets streaming and a single node
+                        node_id = job.nodes_order[0]
+                        cfg = job.params
+                        ds_name = cfg.get("dataset", {}).get("name")
+                        split = cfg.get("dataset", {}).get("split", "train")
+                        text_field = cfg.get("dataset", {}).get("text_field", "text")
+                        model_name = cfg.get("model_name")
+                        max_new = int(cfg.get("max_new_tokens", 32))
+                        cursor = int(cfg.get("cursor", 0))
+                        # Connect to node, ensure model loaded
+                        info = coord.nodes.get(node_id)
+                        if not info:
+                            raise RuntimeError("node_not_available")
+                        ws_target: WebSocketServerProtocol = info["ws"]
+                        if not cfg.get("model_id"):
+                            sub_id = new_id("task")
+                            await ws_target.send(json.dumps(msg(TASK, task_id=sub_id, payload={"kind": "hf_load", "model_name": model_name})))
+                            while True:
+                                raw2 = await ws_target.recv()
+                                d2 = json.loads(raw2)
+                                if d2.get("task_id") == sub_id and d2.get("type") == RESULT:
+                                    cfg["model_id"] = d2.get("model_id")
+                                    break
+                                elif d2.get("task_id") == sub_id and d2.get("type") == ERROR:
+                                    raise RuntimeError(d2.get("error"))
+                        # Stream dataset
+                        ds = load_dataset(ds_name, split=split, streaming=True)
+                        it = iter(ds)
+                        # advance cursor
+                        for _ in range(cursor):
+                            try:
+                                next(it)
+                            except StopIteration:
+                                break
+                        outputs = []
+                        for _ in range(steps):
+                            try:
+                                item = next(it)
+                            except StopIteration:
+                                break
+                            text = str(item.get(text_field, ""))
+                            sub_id = new_id("task")
+                            await ws_target.send(json.dumps(msg(TASK, task_id=sub_id, payload={"kind": "hf_infer", "model_id": cfg.get("model_id"), "prompt": text, "max_new_tokens": max_new})))
+                            while True:
+                                raw2 = await ws_target.recv()
+                                d2 = json.loads(raw2)
+                                if d2.get("task_id") == sub_id and d2.get("type") == RESULT:
+                                    outputs.append(d2.get("text"))
+                                    break
+                                elif d2.get("task_id") == sub_id and d2.get("type") == ERROR:
+                                    outputs.append({"error": d2.get("error")})
+                                    break
+                        job.outputs.extend(outputs)
+                        job.step += len(outputs)
+                        cfg["cursor"] = cursor + len(outputs)
+                        job.params = cfg
+                        put_job(job)
+                        await ws.send(json.dumps(msg(RESULT, job_id=job.job_id, outputs=outputs, step=job.step)))
+                    else:
                         raise RuntimeError("unsupported_job_kind")
-                    # Build optimizer stateful per job
-                    opt = build_optimizer(job.optimizer.get("name", "adam"), **job.optimizer.get("params", {}))
-                    losses = []
-                    for _ in range(steps):
-                        updated_layers, loss = await coord.train_step_pipeline(layers=job.layers, nodes_order=job.nodes_order, x=batch, y_true=target, lr=lr)
-                        job.layers = updated_layers
-                        job.step += 1
-                        losses.append(loss)
-                    put_job(job)
-                    await ws.send(json.dumps(msg(RESULT, job_id=job.job_id, losses=losses, step=job.step, layers=job.layers)))
+                except Exception as e:
+                    await ws.send(json.dumps(msg(ERROR, error=str(e))))
+            elif t == RUN_HF_PIPELINE:
+                try:
+                    nodes_order = data.get("nodes_order") or []
+                    model_name = data.get("model_name", "distilbert-base-uncased")
+                    split_layer = int(data.get("split_layer", 3))
+                    text = data.get("text", "Hello")
+                    if len(nodes_order) != 2:
+                        raise RuntimeError("need_two_nodes")
+                    # Load partials
+                    for i, (start, end) in enumerate([(0, split_layer), (split_layer, 6)]):
+                        nid = nodes_order[i]
+                        info = coord.nodes.get(nid)
+                        if not info:
+                            raise RuntimeError(f"node {nid} not available")
+                        ws_t: WebSocketServerProtocol = info["ws"]
+                        sub_id = new_id("task")
+                        await ws_t.send(json.dumps(msg(TASK, task_id=sub_id, payload={"kind": "hf_part_load", "model_name": model_name, "start": start, "end": end})))
+                        # wait result
+                        while True:
+                            raw2 = await ws_t.recv()
+                            d2 = json.loads(raw2)
+                            if d2.get("task_id") == sub_id and d2.get("type") in (RESULT, ERROR):
+                                if d2.get("type") == ERROR:
+                                    raise RuntimeError(d2.get("error"))
+                                # store model_id back in nodes list
+                                if i == 0:
+                                    mid0 = d2.get("model_id")
+                                else:
+                                    mid1 = d2.get("model_id")
+                                break
+                    # Forward part 1
+                    info0 = coord.nodes.get(nodes_order[0])
+                    ws0: WebSocketServerProtocol = info0["ws"]
+                    tid0 = new_id("task")
+                    await ws0.send(json.dumps(msg(TASK, task_id=tid0, payload={"kind": "hf_part_forward", "model_id": mid0, "text": text})))
+                    while True:
+                        raw0 = await ws0.recv()
+                        d0 = json.loads(raw0)
+                        if d0.get("task_id") == tid0 and d0.get("type") in (RESULT, ERROR):
+                            if d0.get("type") == ERROR:
+                                raise RuntimeError(d0.get("error"))
+                            hidden = d0.get("hidden")
+                            break
+                    # Forward part 2
+                    info1 = coord.nodes.get(nodes_order[1])
+                    ws1: WebSocketServerProtocol = info1["ws"]
+                    tid1 = new_id("task")
+                    await ws1.send(json.dumps(msg(TASK, task_id=tid1, payload={"kind": "hf_part_forward", "model_id": mid1, "hidden": hidden})))
+                    while True:
+                        raw1 = await ws1.recv()
+                        d1 = json.loads(raw1)
+                        if d1.get("task_id") == tid1 and d1.get("type") in (RESULT, ERROR):
+                            if d1.get("type") == ERROR:
+                                raise RuntimeError(d1.get("error"))
+                            hidden2 = d1.get("hidden")
+                            break
+                    await ws.send(json.dumps(msg(RESULT, shape0=[len(hidden), len(hidden[0]), len(hidden[0][0])], shape1=[len(hidden2), len(hidden2[0]), len(hidden2[0][0])])))
                 except Exception as e:
                     await ws.send(json.dumps(msg(ERROR, error=str(e))))
             elif t == GET_JOB:

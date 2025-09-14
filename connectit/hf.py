@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional, List, Tuple
 import json
+from dataclasses import dataclass
 
 
 def has_transformers() -> bool:
@@ -77,5 +78,34 @@ def preprocess_examples(dataset, tokenizer_name: str, text_field: str = "text", 
         enc = tokenizer(texts, padding="max_length", truncation=True, max_length=max_length)
         return enc
     return dataset.map(_proc, batched=True)
+
+
+# DistilBERT partial wrapper for prototype partitioning
+def build_distilbert_partial(model_name: str, start: int, end: int, device: Optional[str] = None):
+    import torch  # type: ignore
+    from transformers import AutoTokenizer, DistilBertModel
+    tok = AutoTokenizer.from_pretrained(model_name)
+    base = DistilBertModel.from_pretrained(model_name)
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    base = base.to(device)
+    class Partial(torch.nn.Module):
+        def __init__(self, base, start, end):
+            super().__init__()
+            self.base = base
+            self.start = start
+            self.end = end
+        def forward(self, input_ids=None, attention_mask=None, hidden_states=None):
+            if hidden_states is None:
+                # embeddings
+                x = self.base.embeddings(input_ids)
+            else:
+                x = hidden_states
+            mask = attention_mask
+            for i in range(self.start, self.end):
+                x = self.base.transformer.layer[i](x, attn_mask=mask)[0]
+            return x
+    part = Partial(base, start, end).to(device).eval()
+    return part, tok, device
 
 

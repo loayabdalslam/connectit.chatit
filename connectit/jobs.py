@@ -12,15 +12,17 @@ STATE_PATH = data_file("coord_state.json")
 @dataclass
 class Job:
     job_id: str
-    kind: str  # 'mlp_train'
+    kind: str  # 'mlp_train' | 'hf_infer'
     nodes_order: list[str]
     layers: list[dict]
-    optimizer: dict  # {'name': 'adam', 'params': {...}}
+    optimizer: dict  # {'name': 'adam', 'params': {...}, 'state': {...}}
     step: int
     losses: list[float]
     created_ms: int
     updated_ms: int
     status: str  # 'pending'|'running'|'stopped'
+    params: dict  # job-specific config
+    outputs: list  # generic outputs for non-loss jobs
 
 
 def load_state() -> Dict[str, Any]:
@@ -43,6 +45,8 @@ def create_mlp_job(nodes_order: list[str], layers: list[dict], optimizer: dict) 
         created_ms=now_ms(),
         updated_ms=now_ms(),
         status="pending",
+        params={},
+        outputs=[],
     )
     state = load_state()
     state["jobs"][job.job_id] = asdict(job)
@@ -50,12 +54,30 @@ def create_mlp_job(nodes_order: list[str], layers: list[dict], optimizer: dict) 
     return job
 
 
+def job_from_dict(d: dict) -> Job:
+    # Backward compatible defaults
+    return Job(
+        job_id=d.get("job_id"),
+        kind=d.get("kind", "mlp_train"),
+        nodes_order=d.get("nodes_order", []),
+        layers=d.get("layers", []),
+        optimizer=d.get("optimizer", {"name": "adam", "params": {}, "state": {}}),
+        step=int(d.get("step", 0)),
+        losses=d.get("losses", []),
+        created_ms=int(d.get("created_ms", now_ms())),
+        updated_ms=int(d.get("updated_ms", now_ms())),
+        status=d.get("status", "pending"),
+        params=d.get("params", {}),
+        outputs=d.get("outputs", []),
+    )
+
+
 def get_job(job_id: str) -> Optional[Job]:
     state = load_state()
     j = state.get("jobs", {}).get(job_id)
     if not j:
         return None
-    return Job(**j)
+    return job_from_dict(j)
 
 
 def put_job(job: Job):
@@ -64,4 +86,30 @@ def put_job(job: Job):
     state["jobs"][job.job_id] = asdict(job)
     save_state(state)
 
+
+def create_hf_infer_job(node_id: str, model_name: str, dataset: dict, max_new_tokens: int = 32) -> Job:
+    job = Job(
+        job_id=new_id("job"),
+        kind="hf_infer",
+        nodes_order=[node_id],
+        layers=[],
+        optimizer={"name": "none", "params": {}, "state": {}},
+        step=0,
+        losses=[],
+        created_ms=now_ms(),
+        updated_ms=now_ms(),
+        status="pending",
+        params={
+            "model_name": model_name,
+            "dataset": dataset,  # {name, split, text_field}
+            "max_new_tokens": int(max_new_tokens),
+            "cursor": int(0),
+            "model_id": None,
+        },
+        outputs=[],
+    )
+    state = load_state()
+    state["jobs"][job.job_id] = asdict(job)
+    save_state(state)
+    return job
 

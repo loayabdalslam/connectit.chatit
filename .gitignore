@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# VSCode / IDE
+.vscode/
+.idea/
+*.iml
+
+# Virtual envs
+env/
+venv/
+.env
+.venv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+*.onnx
+*.pt
+*.ts
+/.connectit/
+*.log
+

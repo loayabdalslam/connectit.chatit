@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 import typer
 from rich.console import Console
 
@@ -6,6 +6,7 @@ from .console import run_console
 from .coordinator import run_coordinator
 from .node import run_node
 from .hf import has_transformers, has_datasets, load_model_and_tokenizer, export_torchscript, export_onnx
+from .p2p import generate_join_link, parse_join_link
 
 app = typer.Typer(add_completion=False, help="ConnectIT CLI (prototype)")
 console = Console()
@@ -78,6 +79,20 @@ def test():
     env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
     res = subprocess.run([sys.executable, script], cwd=root, env=env)
     raise typer.Exit(code=res.returncode)
+
+
+@app.command()
+def p2p_link(
+    network: str = typer.Option("llmnet", help="Network ID"),
+    model: str = typer.Option("demo", help="Model identifier"),
+    hash_hex: str = typer.Option("deadbeef", help="Content hash hex"),
+    bootstrap: List[str] = typer.Option([], help="Bootstrap peers (multiaddr or host:port)")
+):
+    """Generate or parse a P2P join link."""
+    link = generate_join_link(network, model, hash_hex, bootstrap)
+    console.print(f"Link: {link}")
+    info = parse_join_link(link)
+    console.print(f"Parsed: {info}")
 
 
 if __name__ == "__main__":
