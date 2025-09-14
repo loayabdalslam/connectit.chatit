@@ -1,0 +1,99 @@
+Metadata-Version: 2.4
+Name: connectit
+Version: 0.1.0
+Summary: Decentralized layer-parallel model training/hosting (prototype)
+Author: connectit
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: typer>=0.12
+Requires-Dist: rich>=13.7
+Requires-Dist: websockets>=12.0
+Requires-Dist: psutil>=5.9
+Requires-Dist: numpy>=1.24
+Provides-Extra: hf
+Requires-Dist: transformers>=4.40; extra == "hf"
+Requires-Dist: datasets>=2.17; extra == "hf"
+Provides-Extra: onnx
+Requires-Dist: onnx>=1.14; extra == "onnx"
+Requires-Dist: onnxruntime>=1.17; extra == "onnx"
+Provides-Extra: torch
+Requires-Dist: torch>=2.1; (platform_system != "Windows" or platform_machine != "ARM64") and extra == "torch"
+
+ConnectIT (Prototype)
+=====================
+
+Decentralized (layer-parallel) training and hosting prototype for large models via Python, with an interactive console. This is an MVP to explore ideas: a coordinator orchestrates jobs, nodes execute layer computations, and a console lets users log in, pick offers, and launch jobs.
+
+Status: Prototype. Inference pipeline across nodes is implemented as a simple MLP split into layers. Update: Added a toy pipeline-parallel training step and optional PyTorch acceleration on nodes.
+
+Quickstart
+----------
+
+Prereqs: Python 3.9+, `pip`.
+
+1) Install deps (editable):
+
+   pip install -e .
+
+2) Start a coordinator (terminal A):
+
+   connectit coordinator --host 0.0.0.0 --port 8765
+
+3) Start one or more nodes (terminal B/C):
+
+   connectit node --coordinator ws://127.0.0.1:8765 --name node1 --price 0.01
+
+4) Open the interactive console (terminal D):
+
+   connectit console
+
+   - Sign up / log in
+   - Browse available nodes ("offers") and build a plan
+   - Run a demo inference across selected nodes
+   - Run demo training steps across selected nodes (toy SGD)
+   - HF quick inference on a selected node (requires `transformers`)
+   - Load a dataset with preprocessing and preview samples (requires `datasets`)
+
+Notes
+-----
+
+- This is not yet a fully decentralized P2P network. The MVP uses a coordinator service. The architecture is designed for a future pluggable P2P/DHT layer.
+- Computation is performed on nodes using NumPy for portability. Optional GPU: if `torch` is installed and CUDA is available on a node, that node will use PyTorch tensors on GPU for forward/backward; otherwise it falls back to NumPy.
+- All storage is local under `~/.connectit/` by default. This is NOT secure; do not store real secrets.
+
+Training (Toy)
+--------------
+
+- The console sends `RUN_TRAIN_STEP` to the coordinator with the current layers, nodes order, a random batch, and learning rate.
+- The coordinator orchestrates forward passes with caches on nodes, computes MSE loss, and runs reverse passes collecting per-layer grads.
+- The coordinator updates layer weights with SGD, returns updated layers and the loss.
+
+Caveats: No dataset streaming, no optimizer state beyond SGD, no persistent jobs. Demonstration only.
+
+Persistent Jobs
+---------------
+
+- Create a persistent MLP training job from the console (option 6). The coordinator persists jobs to `~/.connectit/coord_state.json`.
+- Run more steps on the current job (option 7). Optimizer config is stored per job; state is kept in memory for the run and weights persisted after each operation.
+
+Hugging Face + Datasets
+-----------------------
+
+- Nodes can load a Hugging Face model and generate text (console option 4). On first use, install extras: `pip install transformers datasets`.
+- Datasets: Load and tokenize via console option 5; configure tokenizer name, text field, and max length.
+
+Export
+------
+
+- Export a model locally:
+
+  connectit export --to onnx --model distilbert-base-uncased --output model.onnx
+
+  connectit export --to torchscript --model distilbert-base-uncased --output out_dir
+
+Testing
+-------
+
+- Built-in lightweight tests (no pytest needed):
+
+  connectit test

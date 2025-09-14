@@ -1,0 +1,2 @@
+[console_scripts]
+connectit = connectit.__main__:app

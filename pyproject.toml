@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "connectit"
+version = "0.1.0"
+description = "Decentralized layer-parallel model training/hosting (prototype)"
+authors = [{ name = "connectit" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "websockets>=12.0",
+  "psutil>=5.9",
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+hf = [
+  "transformers>=4.40",
+  "datasets>=2.17",
+]
+onnx = [
+  "onnx>=1.14",
+  "onnxruntime>=1.17",
+]
+torch = [
+  "torch>=2.1; platform_system != 'Windows' or platform_machine != 'ARM64'",
+]
+
+[project.scripts]
+connectit = "connectit.__main__:app"
