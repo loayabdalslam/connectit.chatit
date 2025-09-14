@@ -46,3 +46,6 @@ Thumbs.db
 /.connectit/
 *.log
 
+
+
+/connectit.egg-info
