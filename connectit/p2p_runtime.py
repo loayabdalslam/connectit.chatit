@@ -69,15 +69,12 @@ class P2PNode:
             async for raw in ws:
                 try:
                     data = json.loads(raw)
-                    print(f"[DEBUG] _peer_reader processing message: {data.get('type')} from {ws.remote_address}")
-                except Exception as e:
-                    print(f"[DEBUG] Failed to parse message from {ws.remote_address}: {e}")
+                except Exception:
                     continue
                 await self._on_message(ws, data)
-        except Exception as e:
-            print(f"[DEBUG] _peer_reader exception from {ws.remote_address}: {e}")
+        except Exception:
+            pass
         finally:
-            print(f"[DEBUG] _peer_reader ending for {ws.remote_address}")
             await self._on_disconnect(ws)
 
     async def _on_disconnect(self, ws):
@@ -108,7 +105,6 @@ class P2PNode:
 
     async def _on_message(self, ws, data: Dict[str, Any]):
         t = data.get("type")
-        print(f"[DEBUG] Received message type: {t} from {ws.remote_address}")
         if t == "hello":
             pid = data.get("peer_id")
             addr = data.get("addr")
@@ -126,7 +122,6 @@ class P2PNode:
             svcs = data.get("services", {})
             if "hf" in svcs:
                 self.providers[pid] = {"hf": svcs["hf"], "latency_ms": None}
-                print(f"[DEBUG] Registered provider {pid} with services: {svcs['hf']}")
             # Respond with our hello + peers list (send only serializable service info)
             serializable_services = {}
             for svc_name, svc_data in self.services.items():
@@ -141,14 +136,11 @@ class P2PNode:
             
             hello_msg = {"type": "hello", "peer_id": self.peer_id, "addr": self.addr, "services": serializable_services}
             await self._send(ws, hello_msg)
-            print(f"[DEBUG] Sent hello to {pid} with our services: {serializable_services}")
             peer_list_msg = {"type": "peer_list", "peers": [v.get("addr") for v in self.peers.values() if v.get("addr")]}
             await self._send(ws, peer_list_msg)
-            print(f"[DEBUG] Sent peer_list to {pid}")
             # Kick off ping
             ping_msg = {"type": "ping", "ts": time.time()}
             await self._send(ws, ping_msg)
-            print(f"[DEBUG] Sent ping to {pid}")
         elif t == "peer_list":
             peers = data.get("peers", [])
             for addr in peers:

@@ -29,8 +29,10 @@ Prereqs: Python 3.9+, `pip`.
 3) Request text generation from another terminal:
 
    ```bash
-   python -m connectit p2p-request "Hello world" --model distilgpt2 --bootstrap-link ws://127.0.0.1:4334
+   python -m connectit p2p-request "Hello world" --bootstrap-link "p2pnet://join?network=connectit&model=distilgpt2&hash=32a0fa785bfb95c97ced872ac200560ffface58c574c775b7fd8304494a4d4e3&bootstrap=d3M6Ly8xMjcuMC4wLjE6NDMzNA=="
    ```
+
+   **Note:** Use the join link displayed by the provider, not the raw WebSocket address.
 
 Commands
 --------
@@ -48,6 +50,78 @@ python -m connectit deploy-hf --model MODEL_NAME --price-per-token PRICE --host 
 - `--price-per-token`: Price per output token (float, e.g., `0.002`)
 - `--host`: Bind host address (default: `0.0.0.0`)
 - `--port`: Bind port (default: `4001`)
+
+**Example:**
+```bash
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
+```
+
+The provider will display a join link like:
+```
+🔗 Join link: p2pnet://join?network=connectit&model=distilgpt2&hash=...&bootstrap=...
+```
+
+### p2p-request
+
+Request text generation from providers on the P2P network.
+
+```bash
+python -m connectit p2p-request PROMPT [OPTIONS]
+```
+
+**Parameters:**
+- `PROMPT`: Text prompt for generation (required)
+- `--model`: Model name to request (default: `distilgpt2`)
+- `--bootstrap-link`: P2P network join link from a provider (required)
+- `--max-new-tokens`: Maximum tokens to generate (default: `32`)
+
+**Example:**
+```bash
+python -m connectit p2p-request "Hello world" --bootstrap-link "p2pnet://join?network=connectit&model=distilgpt2&hash=32a0fa785bfb95c97ced872ac200560ffface58c574c775b7fd8304494a4d4e3&bootstrap=d3M6Ly8xMjcuMC4wLjE6NDMzNA=="
+```
+
+**Important:** Always use the complete `p2pnet://` join link provided by the provider, not raw WebSocket addresses.
+
+Troubleshooting
+--------------
+
+### "No provider found for model"
+
+**Possible causes:**
+- Model name mismatch between request and provider
+- Bootstrap link is incorrect or expired
+- Provider is not running or unreachable
+- Network connectivity issues
+
+**Solutions:**
+1. Verify the model name matches exactly (case-sensitive)
+2. Copy the complete join link from the provider output
+3. Ensure the provider is running and shows "ready to accept connections"
+4. Check firewall settings if connecting across networks
+
+### "Failed to retrieve command output"
+
+**Possible causes:**
+- Terminal encoding issues
+- Long-running process conflicts
+
+**Solutions:**
+1. Run commands in separate terminals
+2. Ensure proper terminal encoding (UTF-8)
+3. Restart terminals if needed
+
+### Connection Issues
+
+**Symptoms:**
+- Peer connection failures
+- Bootstrap connection timeouts
+- Generation request failures
+
+**Solutions:**
+1. Verify both provider and client are on the same network
+2. Check port availability and firewall rules
+3. Try different host/port combinations
+4. Ensure provider is fully loaded before making requests
 - `--bootstrap-link`: Optional P2P bootstrap link to join existing network
 
 **Examples:**
