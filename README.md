@@ -1,6 +1,10 @@
 ConnectIT
 ==========
 
+<a href="https://www.producthunt.com/products/connect-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-connect&#0045;it" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1016671&theme=neutral&t=1758001359763" alt="Connect&#0032;it&#0032; - Torrent&#0032;Like&#0032;Protocol&#0032;for&#0032;Deployment&#0032;LLM&#0032;Models | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
+
+
 A peer-to-peer network for deploying and accessing Hugging Face language models. ConnectIT allows you to deploy any Hugging Face model as a service on a decentralized network and request text generation from the cheapest/lowest-latency providers.
 
 Quickstart
@@ -123,7 +127,13 @@ Troubleshooting
 3. Try different host/port combinations
 4. Ensure provider is fully loaded before making requests
 
-Architecture
+## License
+
+This project is licensed under a custom license that permits non-commercial use only. For commercial use, please contact: loaiabdalslam@gmail.com
+
+See the [LICENSE](LICENSE) file for full details.
+
+## Architecture
 
 Request text generation from the P2P network. Automatically selects the cheapest/lowest-latency provider for the specified model.
 
