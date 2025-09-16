@@ -1,152 +1,294 @@
-ConnectIT (Prototype)
-=====================
+ConnectIT
+==========
 
-Decentralized (layer-parallel) training and hosting prototype for large models via Python, with an interactive console. This is an MVP to explore ideas: a coordinator orchestrates jobs, nodes execute layer computations, and a console lets users log in, pick offers, and launch jobs.
-
-Status: Prototype. Inference pipeline across nodes is implemented as a simple MLP split into layers. Update: Added a toy pipeline-parallel training step and optional PyTorch acceleration on nodes.
+A peer-to-peer network for deploying and accessing Hugging Face language models. ConnectIT allows you to deploy any Hugging Face model as a service on a decentralized network and request text generation from the cheapest/lowest-latency providers.
 
 Quickstart
 ----------
 
 Prereqs: Python 3.9+, `pip`.
 
-1) Install deps (editable):
+1) Install ConnectIT:
 
+   ```bash
    pip install -e .
+   ```
 
-   Optional extras:
+   For full functionality with Hugging Face models:
 
-   - All features (HF, ONNX, Torch, DHT, NAT):
+   ```bash
+   pip install -e .[all]
+   ```
 
-     pip install -e .[all]
+2) Deploy a Hugging Face model:
 
-   - Pick subsets: `.[hf]`, `.[onnx]`, `.[torch]`, `.[dht]`, `.[nat]`
+   ```bash
+   python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
+   ```
 
-2) Start a coordinator (terminal A):
+3) Request text generation from another terminal:
 
-   connectit coordinator --host 0.0.0.0 --port 8765
+   ```bash
+   connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://SEED_HOST:4001
+   ```
 
-3) Start one or more nodes (terminal B/C):
+Commands
+--------
 
-   connectit node --coordinator ws://127.0.0.1:8765 --name node1 --price 0.01
+### deploy-hf
 
-4) Open the interactive console (terminal D):
+Deploy a Hugging Face text-generation model as a service on the P2P network.
 
-   connectit console
+```bash
+python -m connectit deploy-hf --model MODEL_NAME --price-per-token PRICE --host HOST --port PORT
+```
 
-   - Sign up / log in
-   - Browse available nodes ("offers") and build a plan
-   - Run a demo inference across selected nodes
-   - Run demo training steps across selected nodes (toy SGD)
-   - HF quick inference on a selected node (requires `transformers`)
-   - Load a dataset with preprocessing and preview samples (requires `datasets`)
+**Parameters:**
+- `--model`: Hugging Face model name (e.g., `distilgpt2`, `gpt2`, `microsoft/DialoGPT-medium`)
+- `--price-per-token`: Price per output token (float, e.g., `0.002`)
+- `--host`: Bind host address (default: `0.0.0.0`)
+- `--port`: Bind port (default: `4001`)
+- `--bootstrap_link`: Optional P2P bootstrap link to join existing network
 
-Notes
------
+**Examples:**
 
-- This is not yet a fully decentralized P2P network. The MVP uses a coordinator service. The architecture is designed for a future pluggable P2P/DHT layer.
-- Computation is performed on nodes using NumPy for portability. Optional GPU: if `torch` is installed and CUDA is available on a node, that node will use PyTorch tensors on GPU for forward/backward; otherwise it falls back to NumPy.
-- All storage is local under `~/.connectit/` by default. This is NOT secure; do not store real secrets.
+```bash
+# Deploy GPT-2 model
+python -m connectit deploy-hf --model gpt2 --price-per-token 0.001 --host 0.0.0.0 --port 4001
 
-Training (Toy)
---------------
+# Deploy DistilGPT-2 with custom pricing
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
 
-- The console sends `RUN_TRAIN_STEP` to the coordinator with the current layers, nodes order, a random batch, and learning rate.
-- The coordinator orchestrates forward passes with caches on nodes, computes MSE loss, and runs reverse passes collecting per-layer grads.
-- The coordinator updates layer weights with SGD, returns updated layers and the loss.
+# Join existing network
+python -m connectit deploy-hf --model microsoft/DialoGPT-medium --price-per-token 0.005 --bootstrap_link ws://seed.example.com:4001
+```
 
-Caveats: No dataset streaming, no optimizer state beyond SGD, no persistent jobs. Demonstration only.
+### p2p_request
 
-Persistent Jobs
----------------
+Request text generation from the P2P network. Automatically selects the cheapest/lowest-latency provider for the specified model.
 
-- Create a persistent MLP training job from the console (option 6). The coordinator persists jobs to `~/.connectit/coord_state.json`.
-- Run more steps on the current job (option 7). Optimizer config is stored per job; state is kept in memory for the run and weights persisted after each operation.
+```bash
+connectit p2p_request "PROMPT_TEXT" --model MODEL_NAME --bootstrap_link BOOTSTRAP_LINK
+```
 
-Hugging Face + Datasets
------------------------
+**Parameters:**
+- `PROMPT_TEXT`: The text prompt for generation (required)
+- `--model`: Model name to request (default: `distilgpt2`)
+- `--bootstrap_link`: Bootstrap link to join the network (required for discovery)
+- `--max_new_tokens`: Maximum new tokens to generate (default: `32`)
 
-- Nodes can load a Hugging Face model and generate text (console option 4). On first use, install extras: `pip install transformers datasets`.
-- Datasets: Load and tokenize via console option 5; configure tokenizer name, text field, and max length.
+**Examples:**
 
-Export
-------
+```bash
+# Basic text generation
+connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://127.0.0.1:4001
 
-- Export a model locally:
+# Longer generation
+connectit p2p_request "The future of AI is" --model gpt2 --max_new_tokens 50 --bootstrap_link ws://seed.example.com:4001
 
-  connectit export --to onnx --model distilbert-base-uncased --output model.onnx
+# Conversational model
+connectit p2p_request "How are you today?" --model microsoft/DialoGPT-medium --bootstrap_link ws://127.0.0.1:4001
+```
 
-  connectit export --to torchscript --model distilbert-base-uncased --output out_dir
+Programmatic Usage
+------------------
 
-P2P (Torrent-like) Prototype
-----------------------------
+You can use ConnectIT programmatically in your Python scripts:
 
-- Generate a join link:
+```python
+import asyncio
+from connectit.p2p_runtime import P2PNode
 
-  connectit p2p_link --network llmnet --model demo --hash deadbeef --bootstrap_csv "/ip4/203.0.113.10/tcp/4001/p2p/QmPeerID"
+async def request_generation(prompt, model_name="distilgpt2", bootstrap_link=None):
+    """Request text generation programmatically."""
+    node = P2PNode(host="127.0.0.1", port=0)
+    await node.start()
+    
+    if bootstrap_link:
+        await node.connect_bootstrap(bootstrap_link)
+    
+    # Wait for provider discovery
+    await asyncio.sleep(2)
+    
+    # Find the best provider
+    best = node.pick_provider(model_name)
+    if not best:
+        print(f"No provider found for model: {model_name}")
+        return None
+    
+    provider_id, _ = best
+    result = await node.request_generation(
+        provider_id, 
+        prompt, 
+        max_new_tokens=32, 
+        model_name=model_name
+    )
+    
+    await node.stop()
+    return result
 
-- Run a P2P node (discovery only):
+# Usage
+result = asyncio.run(request_generation(
+    "Hello world", 
+    model_name="distilgpt2",
+    bootstrap_link="ws://127.0.0.1:4001"
+))
+print(result)
+```
 
-  connectit p2p --host 0.0.0.0 --port 4001 --bootstrap_link ws://SEED_HOST:4001
+### Script Integration Examples
 
-- Deploy an HF generation service on P2P (sets price per token):
+**Batch Processing:**
 
-  connectit deploy_hf --model distilgpt2 --price-per-token 0.002 --host 0.0.0.0 --port 4001 --bootstrap_link ws://SEED_HOST:4001
+```python
+import asyncio
+from connectit.p2p_runtime import P2PNode
 
-- Request a generation via P2P (picks cheapest/lowest-latency provider):
+async def batch_generate(prompts, model_name="distilgpt2", bootstrap_link=None):
+    """Generate text for multiple prompts."""
+    node = P2PNode(host="127.0.0.1", port=0)
+    await node.start()
+    
+    if bootstrap_link:
+        await node.connect_bootstrap(bootstrap_link)
+    await asyncio.sleep(2)  # Discovery time
+    
+    results = []
+    for prompt in prompts:
+        best = node.pick_provider(model_name)
+        if best:
+            provider_id, _ = best
+            result = await node.request_generation(provider_id, prompt, model_name=model_name)
+            results.append({"prompt": prompt, "result": result})
+        else:
+            results.append({"prompt": prompt, "result": None})
+    
+    await node.stop()
+    return results
 
-  connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://SEED_HOST:4001
+# Usage
+prompts = ["Hello", "How are you?", "Tell me a story"]
+results = asyncio.run(batch_generate(prompts, bootstrap_link="ws://127.0.0.1:4001"))
+for item in results:
+    print(f"Prompt: {item['prompt']}")
+    print(f"Result: {item['result']}")
+    print("---")
+```
 
-Testing
--------
+**Web Service Integration:**
 
-- Built-in lightweight tests (no pytest needed):
+```python
+from flask import Flask, request, jsonify
+import asyncio
+from connectit.p2p_runtime import P2PNode
 
-  connectit test
+app = Flask(__name__)
 
+@app.route('/generate', methods=['POST'])
+def generate_text():
+    data = request.json
+    prompt = data.get('prompt')
+    model = data.get('model', 'distilgpt2')
+    bootstrap_link = data.get('bootstrap_link')
+    
+    async def _generate():
+        node = P2PNode(host="127.0.0.1", port=0)
+        await node.start()
+        if bootstrap_link:
+            await node.connect_bootstrap(bootstrap_link)
+        await asyncio.sleep(2)
+        
+        best = node.pick_provider(model)
+        if not best:
+            return None
+        
+        provider_id, _ = best
+        result = await node.request_generation(provider_id, prompt, model_name=model)
+        await node.stop()
+        return result
+    
+    result = asyncio.run(_generate())
+    return jsonify({'result': result})
 
-Roles & Usage Guide
--------------------
+if __name__ == '__main__':
+    app.run(debug=True)
+```
 
-Network Admin (Bootstrap / Seeds)
-- Start one or more P2P seed nodes to help peers discover each other:
+Deploying Hugging Face Models
+-----------------------------
 
-  connectit p2p --host 0.0.0.0 --port 4001
+### Supported Models
 
-- Open firewall port 4001/TCP and share a join link:
+ConnectIT supports any Hugging Face Causal Language Model. Popular choices include:
 
-  connectit p2p_link --network llmnet --model demo --hash deadbeef --bootstrap_csv "/ip4/SEED_IP/tcp/4001"
+- **GPT-2 family**: `gpt2`, `gpt2-medium`, `gpt2-large`, `gpt2-xl`
+- **DistilGPT-2**: `distilgpt2` (smaller, faster)
+- **DialoGPT**: `microsoft/DialoGPT-small`, `microsoft/DialoGPT-medium`, `microsoft/DialoGPT-large`
+- **CodeGPT**: `microsoft/CodeGPT-small-py`
+- **GPT-Neo**: `EleutherAI/gpt-neo-125M`, `EleutherAI/gpt-neo-1.3B`
+- **Custom models**: Any compatible model from Hugging Face Hub
 
-- Optional DHT (Kademlia): install extras `.[dht]`, run additional DHT daemons, and wire into runtime (future step).
-- NAT: install `.[nat]` and enable UPnP on edge nodes where possible; otherwise consider STUN/TURN.
+### Model Deployment Best Practices
 
-Seller (Provider Node: Host a Model)
-- Deploy a Hugging Face model with a price per token and join the network:
+1. **Choose appropriate pricing**: Set `--price-per-token` based on model size and computational cost
+2. **Resource considerations**: Larger models require more memory and compute time
+3. **Network setup**: Ensure your host/port is accessible to other network participants
+4. **Model caching**: First deployment will download the model; subsequent runs use cached version
 
-  connectit deploy_hf --model distilgpt2 --price-per-token 0.002 --host 0.0.0.0 --port 4002 --bootstrap_link ws://SEED_HOST:4001
+### Advanced Deployment
 
-- The node advertises available models and pricing, and responds to generation requests. Latency is measured via ping and per-request.
+**Custom model with specific configuration:**
 
-Buyer (Consumer: Use a Model)
-- Join the network and auto-pick cheapest/lowest-latency provider for a model:
+```bash
+# Deploy a larger model with higher pricing
+python -m connectit deploy-hf \
+  --model EleutherAI/gpt-neo-1.3B \
+  --price-per-token 0.01 \
+  --host 0.0.0.0 \
+  --port 4001 \
+  --bootstrap_link ws://bootstrap.mynetwork.com:4001
+```
 
-  connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://SEED_HOST:4001
+**Multiple model deployment:**
 
-- Output includes text, new tokens, latency_ms, price_per_token, and total cost.
+You can run multiple instances on different ports to serve different models:
 
-Coordinator Mode (Legacy / Demo)
-- Start coordinator: `connectit coordinator`
-- Start worker nodes: `connectit node --coordinator ws://HOST:8765 --name node1 --price 0.01`
-- Open console: `connectit console` (interactive menus for inference, training, HF demo, jobs)
+```bash
+# Terminal 1: Deploy DistilGPT-2
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.001 --port 4001
 
-Security & Identity
-- This prototype is not secure. For production, implement:
-  - Per-node identities (ed25519) and signed service announcements
-  - TLS/mTLS between peers and seed nodes
-  - Sandbox and resource limits on providers
-  - Reputation/allowlists to reduce spam
+# Terminal 2: Deploy GPT-2 Medium
+python -m connectit deploy-hf --model gpt2-medium --price-per-token 0.005 --port 4002
+
+# Terminal 3: Deploy DialoGPT
+python -m connectit deploy-hf --model microsoft/DialoGPT-medium --price-per-token 0.003 --port 4003
+```
 
 Troubleshooting
-- Windows PATH: if `connectit` is not on PATH, use `python -m connectit ...` with your Python.
-- OpenMP conflicts in tests: `connectit test` sets `KMP_DUPLICATE_LIB_OK=TRUE` automatically.
-- HF/Datasets/ONNX installs may be large; prefer a virtualenv.
+---------------
+
+**Common Issues:**
+
+1. **Command not found**: Use `python -m connectit` instead of `connectit` if the command is not in PATH
+2. **Model download fails**: Ensure internet connection and sufficient disk space
+3. **No providers found**: Check bootstrap_link and ensure at least one provider is running
+4. **Port conflicts**: Use different ports for multiple deployments
+5. **Memory issues**: Use smaller models like `distilgpt2` for limited resources
+
+**Dependencies:**
+
+- Core functionality: `typer`, `rich`, `websockets`, `numpy`
+- Hugging Face models: `transformers`, `torch`
+- Full features: Install with `pip install -e .[all]`
+
+**Performance Tips:**
+
+- Use GPU-enabled PyTorch for faster inference on compatible hardware
+- Choose model size based on available system resources
+- Consider network latency when selecting bootstrap peers
+- Monitor system resources during model deployment
+
+License
+-------
+
+This is a prototype implementation. See license file for details.
