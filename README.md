@@ -3,14 +3,75 @@ ConnectIT
 
 <a href="https://www.producthunt.com/products/connect-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-connect&#0045;it" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1016671&theme=neutral&t=1758001359763" alt="Connect&#0032;it&#0032; - Torrent&#0032;Like&#0032;Protocol&#0032;for&#0032;Deployment&#0032;LLM&#0032;Models | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
+# ConnectIT
 
+[![PyPI version](https://badge.fury.io/py/connectit.svg)](https://badge.fury.io/py/connectit)
+[![Python versions](https://img.shields.io/pypi/pyversions/connectit.svg)](https://pypi.org/project/connectit/)
+[![Downloads](https://pepy.tech/badge/connectit)](https://pepy.tech/project/connectit)
+[![License](https://img.shields.io/badge/License-Custom-blue.svg)](LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/connectit/connectit/ci.yml?branch=main)](https://github.com/connectit/connectit/actions)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Documentation Status](https://readthedocs.org/projects/connectit/badge/?version=latest)](https://connectit.readthedocs.io/en/latest/?badge=latest)
 
 A peer-to-peer network for deploying and accessing Hugging Face language models. ConnectIT allows you to deploy any Hugging Face model as a service on a decentralized network and request text generation from the cheapest/lowest-latency providers.
 
-Quickstart
-----------
+## ✨ Features
 
-Prereqs: Python 3.9+, `pip`.
+- 🌐 **Decentralized P2P Network**: No central server required
+- 🤖 **Hugging Face Integration**: Deploy any HF model instantly
+- 💰 **Cost Optimization**: Automatically selects cheapest providers
+- ⚡ **Low Latency**: Smart provider selection based on response time
+- 🔒 **Secure**: Custom licensing with commercial protection
+- 🚀 **Easy Setup**: One-command deployment and requests
+
+## 📊 Stats & Requirements
+
+![GitHub stars](https://img.shields.io/github/stars/connectit/connectit?style=social)
+![GitHub forks](https://img.shields.io/github/forks/connectit/connectit?style=social)
+![GitHub issues](https://img.shields.io/github/issues/connectit/connectit)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/connectit/connectit)
+
+**Requirements:**
+- Python 3.9+
+- 2GB+ RAM recommended
+- Network connectivity for P2P operations
+
+## Installation
+
+### From PyPI (Recommended)
+
+![PyPI - Status](https://img.shields.io/pypi/status/connectit)
+![PyPI - Wheel](https://img.shields.io/pypi/wheel/connectit)
+![PyPI - Format](https://img.shields.io/pypi/format/connectit)
+
+```bash
+# Basic installation
+pip install connectit
+
+# With Hugging Face support
+pip install connectit[hf]
+
+# With all optional dependencies
+pip install connectit[all]
+```
+
+### From Source
+
+![GitHub repo size](https://img.shields.io/github/repo-size/connectit/connectit)
+![GitHub code size](https://img.shields.io/github/languages/code-size/connectit/connectit)
+
+```bash
+git clone <repository-url>
+cd connectit
+pip install -e .
+```
+
+## 🚀 Quick Start
+
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Terminal](https://img.shields.io/badge/terminal-bash%20%7C%20powershell%20%7C%20cmd-blue)
+
+**Prerequisites:** Python 3.9+, `pip`
 
 1) Install ConnectIT:
 
@@ -126,6 +187,21 @@ Troubleshooting
 2. Check port availability and firewall rules
 3. Try different host/port combinations
 4. Ensure provider is fully loaded before making requests
+
+## 📖 Documentation & Support
+
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen)](https://connectit.readthedocs.io/)
+[![Wiki](https://img.shields.io/badge/wiki-available-blue)](https://github.com/connectit/connectit/wiki)
+[![FAQ](https://img.shields.io/badge/FAQ-available-orange)](https://github.com/connectit/connectit/wiki/FAQ)
+[![Community](https://img.shields.io/badge/community-discussions-purple)](https://github.com/connectit/connectit/discussions)
+
+## 🤝 Contributing
+
+[![Contributors](https://img.shields.io/github/contributors/connectit/connectit)](https://github.com/connectit/connectit/graphs/contributors)
+[![Good first issues](https://img.shields.io/github/issues/connectit/connectit/good%20first%20issue)](https://github.com/connectit/connectit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[![Help wanted](https://img.shields.io/github/issues/connectit/connectit/help%20wanted)](https://github.com/connectit/connectit/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 

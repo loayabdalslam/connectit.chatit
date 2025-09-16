@@ -1,10 +1,66 @@
 Metadata-Version: 2.4
 Name: connectit
 Version: 0.1.0
-Summary: Decentralized layer-parallel model training/hosting (prototype)
-Author: connectit
+Summary: Decentralized P2P network for AI model hosting and inference
+Author-email: ConnectIT Team <loaiabdalslam@gmail.com>
+License: ConnectIT Custom License
+        
+        Copyright (c) 2024 ConnectIT Project
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to use,
+        copy, modify, merge, publish, and distribute the Software for NON-COMMERCIAL
+        purposes only, subject to the following conditions:
+        
+        NON-COMMERCIAL USE ONLY:
+        This license permits use of the Software for personal, educational, research,
+        and other non-commercial purposes. Any use that generates revenue, profit, or
+        is part of a commercial enterprise is strictly prohibited under this license.
+        
+        COMMERCIAL USE:
+        For any commercial use, including but not limited to:
+        - Integration into commercial products or services
+        - Use in revenue-generating applications
+        - Distribution as part of commercial software
+        - Use by commercial entities for business purposes
+        
+        You must obtain explicit written permission from the copyright holder.
+        For commercial licensing inquiries, please contact: loaiabdalslam@gmail.com
+        
+        CONDITIONS:
+        1. The above copyright notice and this permission notice shall be included in
+           all copies or substantial portions of the Software.
+        
+        2. Any modifications or derivative works must also be distributed under this
+           same license.
+        
+        3. You may not remove or alter any copyright notices or license terms.
+        
+        DISCLAIMER:
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+        For questions about this license or to request commercial usage rights,
+        contact: loaiabdalslam@gmail.com
+Keywords: p2p,ai,machine-learning,distributed,inference,transformers
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: System :: Distributed Computing
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: typer>=0.12
 Requires-Dist: rich>=13.7
 Requires-Dist: websockets>=12.0
@@ -32,14 +88,41 @@ Requires-Dist: torch>=2.1; (platform_system != "Windows" or platform_machine != 
 Requires-Dist: kademlia>=2.2.2; extra == "all"
 Requires-Dist: miniupnpc>=2.2.5; extra == "all"
 Requires-Dist: aiortc>=1.9.0; extra == "all"
+Dynamic: license-file
 
 ConnectIT
 ==========
 
+<a href="https://www.producthunt.com/products/connect-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-connect&#0045;it" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1016671&theme=neutral&t=1758001359763" alt="Connect&#0032;it&#0032; - Torrent&#0032;Like&#0032;Protocol&#0032;for&#0032;Deployment&#0032;LLM&#0032;Models | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
+
+
 A peer-to-peer network for deploying and accessing Hugging Face language models. ConnectIT allows you to deploy any Hugging Face model as a service on a decentralized network and request text generation from the cheapest/lowest-latency providers.
 
-Quickstart
-----------
+## Installation
+
+### From PyPI (Recommended)
+
+```bash
+# Basic installation
+pip install connectit
+
+# With Hugging Face support
+pip install connectit[hf]
+
+# With all optional dependencies
+pip install connectit[all]
+```
+
+### From Source
+
+```bash
+git clone <repository-url>
+cd connectit
+pip install -e .
+```
+
+## Quick Start
 
 Prereqs: Python 3.9+, `pip`.
 
@@ -157,22 +240,14 @@ Troubleshooting
 2. Check port availability and firewall rules
 3. Try different host/port combinations
 4. Ensure provider is fully loaded before making requests
-- `--bootstrap-link`: Optional P2P bootstrap link to join existing network
 
-**Examples:**
+## License
 
-```bash
-# Deploy GPT-2 model
-python -m connectit deploy-hf --model gpt2 --price-per-token 0.001 --host 0.0.0.0 --port 4001
+This project is licensed under a custom license that permits non-commercial use only. For commercial use, please contact: loaiabdalslam@gmail.com
 
-# Deploy DistilGPT-2 with custom pricing
-python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
+See the [LICENSE](LICENSE) file for full details.
 
-# Join existing network
-python -m connectit deploy-hf --model microsoft/DialoGPT-medium --price-per-token 0.005 --bootstrap-link ws://seed.example.com:4001
-```
-
-### p2p-request
+## Architecture
 
 Request text generation from the P2P network. Automatically selects the cheapest/lowest-latency provider for the specified model.
 

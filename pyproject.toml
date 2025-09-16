@@ -5,10 +5,24 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "connectit"
 version = "0.1.0"
-description = "Decentralized layer-parallel model training/hosting (prototype)"
-authors = [{ name = "connectit" }]
+description = "Decentralized P2P network for AI model hosting and inference"
+authors = [{ name = "ConnectIT Team", email = "loaiabdalslam@gmail.com" }]
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.9"
+keywords = ["p2p", "ai", "machine-learning", "distributed", "inference", "transformers"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Distributed Computing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
   "typer>=0.12",
   "rich>=13.7",
