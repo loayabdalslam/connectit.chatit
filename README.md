@@ -122,22 +122,8 @@ Troubleshooting
 2. Check port availability and firewall rules
 3. Try different host/port combinations
 4. Ensure provider is fully loaded before making requests
-- `--bootstrap-link`: Optional P2P bootstrap link to join existing network
 
-**Examples:**
-
-```bash
-# Deploy GPT-2 model
-python -m connectit deploy-hf --model gpt2 --price-per-token 0.001 --host 0.0.0.0 --port 4001
-
-# Deploy DistilGPT-2 with custom pricing
-python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
-
-# Join existing network
-python -m connectit deploy-hf --model microsoft/DialoGPT-medium --price-per-token 0.005 --bootstrap-link ws://seed.example.com:4001
-```
-
-### p2p-request
+Architecture
 
 Request text generation from the P2P network. Automatically selects the cheapest/lowest-latency provider for the specified model.
 
