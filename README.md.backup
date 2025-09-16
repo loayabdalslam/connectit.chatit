@@ -5,9 +5,9 @@ ConnectIT
 
 # ConnectIT
 
-[![PyPI version](https://img.shields.io/pypi/v/connectit.svg)](https://pypi.org/project/connectit/)
+[![PyPI version](https://badge.fury.io/py/connectit.svg)](https://badge.fury.io/py/connectit)
 [![Python versions](https://img.shields.io/pypi/pyversions/connectit.svg)](https://pypi.org/project/connectit/)
-[![Downloads](https://img.shields.io/pypi/dm/connectit.svg)](https://pypi.org/project/connectit/)
+[![Downloads](https://pepy.tech/badge/connectit)](https://pepy.tech/project/connectit)
 [![License](https://img.shields.io/badge/License-Custom-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/connectit/connectit/ci.yml?branch=main)](https://github.com/connectit/connectit/actions)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
