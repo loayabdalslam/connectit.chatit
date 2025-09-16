@@ -29,7 +29,7 @@ Prereqs: Python 3.9+, `pip`.
 3) Request text generation from another terminal:
 
    ```bash
-   connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://SEED_HOST:4001
+   python -m connectit p2p-request "Hello world" --model distilgpt2 --bootstrap-link ws://127.0.0.1:4334
    ```
 
 Commands
@@ -48,7 +48,7 @@ python -m connectit deploy-hf --model MODEL_NAME --price-per-token PRICE --host 
 - `--price-per-token`: Price per output token (float, e.g., `0.002`)
 - `--host`: Bind host address (default: `0.0.0.0`)
 - `--port`: Bind port (default: `4001`)
-- `--bootstrap_link`: Optional P2P bootstrap link to join existing network
+- `--bootstrap-link`: Optional P2P bootstrap link to join existing network
 
 **Examples:**
 
@@ -60,34 +60,99 @@ python -m connectit deploy-hf --model gpt2 --price-per-token 0.001 --host 0.0.0.
 python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
 
 # Join existing network
-python -m connectit deploy-hf --model microsoft/DialoGPT-medium --price-per-token 0.005 --bootstrap_link ws://seed.example.com:4001
+python -m connectit deploy-hf --model microsoft/DialoGPT-medium --price-per-token 0.005 --bootstrap-link ws://seed.example.com:4001
 ```
 
-### p2p_request
+### p2p-request
 
 Request text generation from the P2P network. Automatically selects the cheapest/lowest-latency provider for the specified model.
 
 ```bash
-connectit p2p_request "PROMPT_TEXT" --model MODEL_NAME --bootstrap_link BOOTSTRAP_LINK
+python -m connectit p2p-request "PROMPT_TEXT" --model MODEL_NAME --bootstrap-link BOOTSTRAP_LINK
 ```
 
 **Parameters:**
 - `PROMPT_TEXT`: The text prompt for generation (required)
 - `--model`: Model name to request (default: `distilgpt2`)
-- `--bootstrap_link`: Bootstrap link to join the network (required for discovery)
-- `--max_new_tokens`: Maximum new tokens to generate (default: `32`)
+- `--bootstrap-link`: Bootstrap link to join the network (required for discovery)
+- `--max-new-tokens`: Maximum new tokens to generate (default: `32`)
 
 **Examples:**
 
 ```bash
 # Basic text generation
-connectit p2p_request "Hello world" --model distilgpt2 --bootstrap_link ws://127.0.0.1:4001
+python -m connectit p2p-request "Hello world" --model distilgpt2 --bootstrap-link ws://127.0.0.1:4334
 
-# Longer generation
-connectit p2p_request "The future of AI is" --model gpt2 --max_new_tokens 50 --bootstrap_link ws://seed.example.com:4001
+# Longer generation with more tokens
+python -m connectit p2p-request "The future of AI is" --model distilgpt2 --max-new-tokens 50 --bootstrap-link ws://127.0.0.1:4334
 
-# Conversational model
-connectit p2p_request "How are you today?" --model microsoft/DialoGPT-medium --bootstrap_link ws://127.0.0.1:4001
+# Question answering
+python -m connectit p2p-request "What is artificial intelligence?" --model distilgpt2 --max-new-tokens 100 --bootstrap-link ws://127.0.0.1:4334
+
+# Creative writing prompt
+python -m connectit p2p-request "Once upon a time in a distant galaxy" --model distilgpt2 --max-new-tokens 75 --bootstrap-link ws://127.0.0.1:4334
+```
+
+## Real-World Usage Scenarios
+
+### Scenario 1: Local Development and Testing
+
+**Step 1:** Start a local provider in one terminal:
+```bash
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --host 127.0.0.1 --port 4334
+```
+
+**Step 2:** Test requests from another terminal:
+```bash
+# Simple test
+python -m connectit p2p-request "Hello, world!" --model distilgpt2 --bootstrap-link ws://127.0.0.1:4334
+
+# Check response quality
+python -m connectit p2p-request "Explain machine learning in simple terms" --model distilgpt2 --max-new-tokens 50 --bootstrap-link ws://127.0.0.1:4334
+```
+
+### Scenario 2: Multi-Provider Network
+
+**Provider A (Fast, Expensive):**
+```bash
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.005 --host 0.0.0.0 --port 4001
+```
+
+**Provider B (Slow, Cheap):**
+```bash
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.001 --host 0.0.0.0 --port 4002 --bootstrap-link ws://localhost:4001
+```
+
+**Client requests automatically select the best provider:**
+```bash
+# Will choose Provider B (cheaper)
+python -m connectit p2p-request "Generate a short story" --model distilgpt2 --bootstrap-link ws://localhost:4001
+```
+
+### Scenario 3: Different Models for Different Tasks
+
+**Deploy specialized models:**
+```bash
+# Terminal 1: General text generation
+python -m connectit deploy-hf --model distilgpt2 --price-per-token 0.002 --port 4001
+
+# Terminal 2: Conversational AI
+python -m connectit deploy-hf --model microsoft/DialoGPT-small --price-per-token 0.003 --port 4002 --bootstrap-link ws://127.0.0.1:4001
+
+# Terminal 3: Code generation
+python -m connectit deploy-hf --model microsoft/CodeGPT-small-py --price-per-token 0.004 --port 4003 --bootstrap-link ws://127.0.0.1:4001
+```
+
+**Use appropriate model for each task:**
+```bash
+# General text
+python -m connectit p2p-request "Write a product description" --model distilgpt2 --bootstrap-link ws://127.0.0.1:4001
+
+# Conversation
+python -m connectit p2p-request "How are you feeling today?" --model microsoft/DialoGPT-small --bootstrap-link ws://127.0.0.1:4001
+
+# Code
+python -m connectit p2p-request "def fibonacci(n):" --model microsoft/CodeGPT-small-py --bootstrap-link ws://127.0.0.1:4001
 ```
 
 Programmatic Usage
@@ -246,7 +311,7 @@ python -m connectit deploy-hf \
   --price-per-token 0.01 \
   --host 0.0.0.0 \
   --port 4001 \
-  --bootstrap_link ws://bootstrap.mynetwork.com:4001
+  --bootstrap-link ws://bootstrap.mynetwork.com:4001
 ```
 
 **Multiple model deployment:**
@@ -271,9 +336,11 @@ Troubleshooting
 
 1. **Command not found**: Use `python -m connectit` instead of `connectit` if the command is not in PATH
 2. **Model download fails**: Ensure internet connection and sufficient disk space
-3. **No providers found**: Check bootstrap_link and ensure at least one provider is running
+3. **No providers found**: Check bootstrap-link and ensure at least one provider is running
 4. **Port conflicts**: Use different ports for multiple deployments
 5. **Memory issues**: Use smaller models like `distilgpt2` for limited resources
+6. **Connection timeout**: Wait a few seconds after starting providers before making requests
+7. **Concurrency errors**: Fixed in latest version - providers now handle multiple simultaneous requests
 
 **Dependencies:**
 
@@ -287,6 +354,9 @@ Troubleshooting
 - Choose model size based on available system resources
 - Consider network latency when selecting bootstrap peers
 - Monitor system resources during model deployment
+- Start with `distilgpt2` for testing - it's fast and lightweight
+- Use `--max-new-tokens` to control response length and generation time
+- Multiple providers of the same model create automatic load balancing
 
 License
 -------
